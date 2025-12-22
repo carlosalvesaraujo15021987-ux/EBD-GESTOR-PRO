@@ -29,6 +29,7 @@ export interface AttendanceRecord {
   date: string;
   classId: string;
   presentStudentIds: string[];
+  justifications?: { [studentId: string]: string }; // Map of studentId -> justification text
   visitorsCount: number;
   biblesCount: number;
   magazinesCount: number;
@@ -46,6 +47,8 @@ export interface ChurchSettings {
   churchName: string;
   address: string;
   logoUrl?: string;
+  loginBackgroundUrl?: string; // New field for login cover image
+  certificateLogoUrl?: string; // Specific logo for certificates
   leadership: {
     pastorPresidente: string;
     dirigentes: string;

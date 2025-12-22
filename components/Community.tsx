@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   BookOpen, MessageCircle, Cake, Upload, Send, Trash2, Calendar, 
-  FileText, Bell, Star, Edit2, X, Share2, Image as ImageIcon, Copy, Check, Download
+  FileText, Bell, Star, Edit2, X, Share2, Image as ImageIcon, Copy, Check, Download, MessageCircleHeart
 } from 'lucide-react';
 import { Student, QuarterlyLesson, WallPost } from '../types';
 import { StorageService } from '../services/storage';
@@ -51,6 +52,81 @@ const Community: React.FC<CommunityProps> = ({ students }) => {
   const refreshData = () => {
     setLessons(StorageService.getLessons());
     setPosts(StorageService.getPosts());
+  };
+
+  // --- Birthday Sharing Logic ---
+  const handleShareBirthdays = async (type: 'day' | 'week') => {
+    const now = new Date();
+    let title = '';
+    let list: Student[] = [];
+
+    if (type === 'day') {
+        const todayDay = now.getDate();
+        const todayMonth = now.getMonth() + 1;
+        
+        list = students.filter(s => {
+            if(!s.active || !s.birthDate) return false;
+            const [_, m, d] = s.birthDate.split('-');
+            return parseInt(m) === todayMonth && parseInt(d) === todayDay;
+        });
+        
+        title = `🎂 Aniversariantes de Hoje (${todayDay}/${todayMonth})`;
+    } else {
+        // Week Logic (Sunday to Saturday)
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Go to Sunday
+        startOfWeek.setHours(0,0,0,0);
+        
+        const endOfWeek = new Date(now);
+        endOfWeek.setDate(now.getDate() + (6 - now.getDay())); // Go to Saturday
+        endOfWeek.setHours(23,59,59,999);
+
+        list = students.filter(s => {
+            if(!s.active || !s.birthDate) return false;
+            const [_, m, d] = s.birthDate.split('-');
+            // Create a date object for the birthday THIS YEAR
+            const bdayDate = new Date(now.getFullYear(), parseInt(m) - 1, parseInt(d));
+            
+            // Handle edge case for Dec/Jan weeks (not implementing full year wrap logic for simplicity, focusing on current week)
+            return bdayDate >= startOfWeek && bdayDate <= endOfWeek;
+        }).sort((a, b) => {
+             const dayA = parseInt(a.birthDate.split('-')[2]);
+             const dayB = parseInt(b.birthDate.split('-')[2]);
+             return dayA - dayB;
+        });
+        
+        title = `🍰 Aniversariantes da Semana`;
+    }
+
+    if (list.length === 0) {
+        alert(`Nenhum aniversariante encontrado para ${type === 'day' ? 'hoje' : 'esta semana'}.`);
+        return;
+    }
+
+    let text = `🎉 *${title.toUpperCase()}* 🎉\n\n`;
+    list.forEach(s => {
+        const [_, m, d] = s.birthDate.split('-');
+        const currentYear = new Date().getFullYear();
+        const birthYear = parseInt(s.birthDate.split('-')[0]);
+        const age = currentYear - birthYear;
+        
+        text += `🥳 *${s.name}* - Dia ${d}/${m} (${age} anos)\n`;
+    });
+    text += `\nParabéns! Que Deus abençoe! 🙌`;
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: title,
+                text: text
+            });
+        } catch (err) {
+            console.log('Share canceled');
+        }
+    } else {
+        navigator.clipboard.writeText(text);
+        alert('Lista copiada para a área de transferência! Cole no WhatsApp.');
+    }
   };
 
   // --- Lesson Handlers ---
@@ -156,6 +232,23 @@ const Community: React.FC<CommunityProps> = ({ students }) => {
   return (
     <div className="space-y-6 animate-fade-in pb-20">
       
+      {/* Component Header with Global Action */}
+      <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
+          <div>
+             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <MessageCircleHeart className="text-pink-600" />
+                Mural da EBD
+             </h2>
+             <p className="text-sm text-gray-500">Comunicação, avisos e material didático.</p>
+          </div>
+          <button 
+            onClick={handleCreateNewLesson}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-transform active:scale-95"
+          >
+             <Upload size={18} /> Nova Lição
+          </button>
+      </div>
+
       {/* Header Tabs */}
       <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 flex">
         <button 
@@ -175,15 +268,9 @@ const Community: React.FC<CommunityProps> = ({ students }) => {
       {/* --- LESSONS TAB --- */}
       {activeTab === 'lessons' && (
         <div className="space-y-6">
-           {/* Actions Bar */}
+           {/* Actions Bar - Title Only */}
            <div className="flex justify-between items-center">
               <h3 className="text-xl font-bold text-gray-800">Material de Apoio</h3>
-              <button 
-                onClick={handleCreateNewLesson}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm"
-              >
-                 <Upload size={18} /> Nova Lição
-              </button>
            </div>
 
            {/* Lessons Grid */}
@@ -316,12 +403,29 @@ const Community: React.FC<CommunityProps> = ({ students }) => {
             <div className="space-y-6">
                 <div className="bg-gradient-to-b from-pink-500 to-rose-600 rounded-xl shadow-lg text-white p-6 relative overflow-hidden">
                     <Cake className="absolute -bottom-4 -right-4 w-32 h-32 opacity-20 rotate-12" />
+                    
                     <h3 className="text-xl font-bold mb-1 flex items-center gap-2 relative z-10">
                         <Cake size={24} /> Aniversariantes
                     </h3>
-                    <p className="text-pink-100 text-sm relative z-10 font-medium">
+                    <p className="text-pink-100 text-sm relative z-10 font-medium mb-4">
                         Mês de {monthNames[currentMonth]}
                     </p>
+
+                    {/* Sharing Buttons */}
+                    <div className="relative z-10 flex gap-2">
+                        <button 
+                            onClick={() => handleShareBirthdays('day')}
+                            className="flex-1 bg-white/20 hover:bg-white/30 text-white text-xs font-bold py-1.5 px-2 rounded-lg backdrop-blur-sm transition-colors flex items-center justify-center gap-1"
+                        >
+                            <Share2 size={12} /> Dia
+                        </button>
+                        <button 
+                            onClick={() => handleShareBirthdays('week')}
+                            className="flex-1 bg-white/20 hover:bg-white/30 text-white text-xs font-bold py-1.5 px-2 rounded-lg backdrop-blur-sm transition-colors flex items-center justify-center gap-1"
+                        >
+                            <Share2 size={12} /> Semana
+                        </button>
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

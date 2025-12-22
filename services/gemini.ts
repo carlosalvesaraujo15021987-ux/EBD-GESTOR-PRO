@@ -1,8 +1,6 @@
+
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize the Gemini API client
-// Note: In a real production app, ensure the key is safe. 
-// Here we assume it is injected via process.env.API_KEY as per instructions.
 const apiKey = process.env.API_KEY || ''; 
 const ai = new GoogleGenAI({ apiKey });
 
@@ -32,7 +30,7 @@ export const generateLessonPlan = async (topic: string, ageGroup: string, contex
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
 

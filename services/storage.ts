@@ -12,7 +12,9 @@ const STORAGE_KEYS = {
   LAST_SEEN_MURAL: 'ebd_last_seen_mural',
   EVENTS: 'ebd_events',
   USERS: 'ebd_users',
-  SESSION: 'ebd_session_user'
+  SESSION: 'ebd_session_user',
+  AGENDA_BANNER: 'ebd_agenda_banner',
+  THEME: 'ebd_theme'
 };
 
 // Seed Data
@@ -43,7 +45,7 @@ const initialStudents: Student[] = [
 const initialAttendance: AttendanceRecord[] = [
   {
     id: 'att1',
-    date: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0], // Last week
+    date: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
     classId: 'c1',
     presentStudentIds: ['s1', 's2'],
     visitorsCount: 1,
@@ -51,16 +53,6 @@ const initialAttendance: AttendanceRecord[] = [
     magazinesCount: 2,
     offeringValue: 15.50,
     notes: 'Aula sobre a Arca de Noé'
-  },
-  {
-    id: 'att2',
-    date: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
-    classId: 'c4',
-    presentStudentIds: ['s6'],
-    visitorsCount: 0,
-    biblesCount: 5,
-    magazinesCount: 3,
-    offeringValue: 150.00,
   }
 ];
 
@@ -76,270 +68,215 @@ const initialSettings: ChurchSettings = {
   }
 };
 
-const initialLessons: QuarterlyLesson[] = [
-  {
-    id: 'l1',
-    category: 'Adultos',
-    title: 'Lição 01 - O Início de Tudo',
-    goldenText: 'No princípio criou Deus o céu e a terra. (Gn 1:1)',
-    dailyReading: 'Seg: Gn 1:1\nTer: Jo 1:1\nQua: Sl 33:6\nQui: Hb 11:3\nSex: Sl 19:1\nSáb: Is 40:28',
-    dateAdded: new Date().toISOString()
-  }
-];
-
-const initialPosts: WallPost[] = [
-  {
-    id: 'p1',
-    title: 'Bem-vindo ao Novo App!',
-    content: 'Estamos muito felizes em lançar o EBD Gestor Pro. Agora você pode acompanhar tudo digitalmente.',
-    type: 'update',
-    date: new Date().toISOString()
-  }
-];
-
-const initialEvents: ChurchEvent[] = [
-  {
-    id: 'e1',
-    title: 'Simpósio de Doutrina',
-    date: new Date(new Date().setDate(new Date().getDate() + 10)).toISOString().split('T')[0],
-    time: '19:00',
-    location: 'Sede - ADMSJP',
-    scope: 'campo',
-    category: 'simposio',
-    description: 'Grande simpósio para obreiros e líderes.'
-  },
-  {
-    id: 'e2',
-    title: 'Confraternização dos Jovens',
-    date: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
-    time: '18:00',
-    location: 'Congregação Jd Brasil',
-    scope: 'local',
-    category: 'confraternizacao',
-    description: 'Jantar de comunhão.'
-  }
-];
-
-// Initial Admin User
 const initialAdmin: User = {
     id: 'admin_1',
     name: 'Administrador',
     email: 'admin@ebd.com',
-    password: 'admin123', // Simple text for local demo
+    password: 'admin123',
     role: 'admin',
     token: 'ADMIN1',
     active: true,
     createdAt: new Date().toISOString()
 };
 
-// Helper to initialize if empty
+/**
+ * Função utilitária para parsing seguro de JSON.
+ * Se o valor não for um JSON válido (ex: data pura "2025-02-18"), 
+ * retorna o valor original como string, evitando o SyntaxError.
+ */
+const safeJsonParse = (key: string, fallback: any = null) => {
+    const val = localStorage.getItem(key);
+    if (val === null) return fallback;
+    
+    const trimmed = val.trim();
+    // JSON strings start with specific characters. 
+    // This pre-check prevents the parser from exploding on date strings like 2025-02-18
+    const isJsonLike = (
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        trimmed === 'true' || trimmed === 'false' || trimmed === 'null' ||
+        /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)
+    );
+
+    if (!isJsonLike) return val;
+
+    try {
+        return JSON.parse(val);
+    } catch (e) {
+        return val;
+    }
+};
+
+const safeJsonSet = (key: string, value: any) => {
+    localStorage.setItem(key, JSON.stringify(value));
+};
+
 const initStorage = () => {
   if (!localStorage.getItem(STORAGE_KEYS.CLASSES)) {
-    localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(initialClasses));
-    localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(initialTeachers));
-    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(initialStudents));
-    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(initialAttendance));
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(initialSettings));
-    localStorage.setItem(STORAGE_KEYS.LESSONS, JSON.stringify(initialLessons));
-    localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(initialPosts));
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(initialEvents));
-  } else {
-    // Check if settings need update (migration strategy)
-    const currentSettings = JSON.parse(localStorage.getItem(STORAGE_KEYS.SETTINGS) || '{}');
-    if (!currentSettings.leadership?.pastorPresidente) {
-         const mergedSettings = { ...initialSettings, ...currentSettings, leadership: { ...initialSettings.leadership, ...currentSettings.leadership } };
-         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(mergedSettings));
-    }
-    // Check if events need init
-    if (!localStorage.getItem(STORAGE_KEYS.EVENTS)) {
-        localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(initialEvents));
-    }
+    safeJsonSet(STORAGE_KEYS.CLASSES, initialClasses);
+    safeJsonSet(STORAGE_KEYS.TEACHERS, initialTeachers);
+    safeJsonSet(STORAGE_KEYS.STUDENTS, initialStudents);
+    safeJsonSet(STORAGE_KEYS.ATTENDANCE, initialAttendance);
+    safeJsonSet(STORAGE_KEYS.SETTINGS, initialSettings);
+    safeJsonSet(STORAGE_KEYS.LESSONS, []);
+    safeJsonSet(STORAGE_KEYS.POSTS, []);
+    safeJsonSet(STORAGE_KEYS.EVENTS, []);
   }
 
-  // Ensure Users exist
   if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([initialAdmin]));
+      safeJsonSet(STORAGE_KEYS.USERS, [initialAdmin]);
   }
 };
 
 initStorage();
 
 export const StorageService = {
-  // --- Classes ---
-  getClasses: (): ClassRoom[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.CLASSES) || '[]'),
+  getClasses: (): ClassRoom[] => safeJsonParse(STORAGE_KEYS.CLASSES, []),
   addClass: (cls: ClassRoom) => {
     const data = StorageService.getClasses();
-    const existingIndex = data.findIndex(c => c.id === cls.id);
-    if (existingIndex >= 0) {
-      data[existingIndex] = cls;
-    } else {
-      data.push(cls);
-    }
-    localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(data));
+    const idx = data.findIndex(c => c.id === cls.id);
+    if (idx >= 0) data[idx] = cls; else data.push(cls);
+    safeJsonSet(STORAGE_KEYS.CLASSES, data);
   },
   deleteClass: (id: string) => {
-    const data = StorageService.getClasses().filter(c => c.id !== id);
-    localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(data));
+    safeJsonSet(STORAGE_KEYS.CLASSES, StorageService.getClasses().filter(c => c.id !== id));
   },
   
-  // --- Teachers ---
-  getTeachers: (): Teacher[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.TEACHERS) || '[]'),
+  getTeachers: (): Teacher[] => safeJsonParse(STORAGE_KEYS.TEACHERS, []),
   addTeacher: (teacher: Teacher) => {
     const data = StorageService.getTeachers();
-    const existingIndex = data.findIndex(t => t.id === teacher.id);
-    if (existingIndex >= 0) {
-      data[existingIndex] = teacher;
-    } else {
-      data.push(teacher);
-    }
-    localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(data));
+    const idx = data.findIndex(t => t.id === teacher.id);
+    if (idx >= 0) data[idx] = teacher; else data.push(teacher);
+    safeJsonSet(STORAGE_KEYS.TEACHERS, data);
   },
   deleteTeacher: (id: string) => {
-    const data = StorageService.getTeachers().filter(t => t.id !== id);
-    localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(data));
+    safeJsonSet(STORAGE_KEYS.TEACHERS, StorageService.getTeachers().filter(t => t.id !== id));
   },
 
-  // --- Students ---
-  getStudents: (): Student[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENTS) || '[]'),
+  getStudents: (): Student[] => safeJsonParse(STORAGE_KEYS.STUDENTS, []),
   saveStudent: (student: Student) => {
     const data = StorageService.getStudents();
-    const existingIndex = data.findIndex(s => s.id === student.id);
-    if (existingIndex >= 0) {
-      data[existingIndex] = student;
-    } else {
-      data.push(student);
-    }
-    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data));
+    const idx = data.findIndex(s => s.id === student.id);
+    if (idx >= 0) data[idx] = student; else data.push(student);
+    safeJsonSet(STORAGE_KEYS.STUDENTS, data);
   },
   deleteStudent: (id: string) => {
-    const data = StorageService.getStudents().filter(s => s.id !== id);
-    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data));
+    safeJsonSet(STORAGE_KEYS.STUDENTS, StorageService.getStudents().filter(s => s.id !== id));
   },
 
-  // --- Attendance ---
-  getAttendance: (): AttendanceRecord[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.ATTENDANCE) || '[]'),
+  getAttendance: (): AttendanceRecord[] => safeJsonParse(STORAGE_KEYS.ATTENDANCE, []),
   saveAttendance: (record: AttendanceRecord) => {
     const data = StorageService.getAttendance();
-    const existingIndex = data.findIndex(r => r.date === record.date && r.classId === record.classId);
-    if (existingIndex >= 0) {
-      data[existingIndex] = record;
-    } else {
-      data.push(record);
-    }
-    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(data));
+    const idx = data.findIndex(r => r.date === record.date && r.classId === record.classId);
+    if (idx >= 0) data[idx] = record; else data.push(record);
+    safeJsonSet(STORAGE_KEYS.ATTENDANCE, data);
   },
 
-  // --- Settings ---
-  getSettings: (): ChurchSettings => {
-    const settings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    return settings ? JSON.parse(settings) : initialSettings;
-  },
+  getSettings: (): ChurchSettings => safeJsonParse(STORAGE_KEYS.SETTINGS, initialSettings),
   saveSettings: (settings: ChurchSettings) => {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    safeJsonSet(STORAGE_KEYS.SETTINGS, settings);
   },
 
-  // --- Lessons ---
-  getLessons: (): QuarterlyLesson[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.LESSONS) || '[]'),
+  getLessons: (): QuarterlyLesson[] => safeJsonParse(STORAGE_KEYS.LESSONS, []),
   saveLesson: (lesson: QuarterlyLesson) => {
     const data = StorageService.getLessons();
-    const existingIndex = data.findIndex(l => l.id === lesson.id);
-    if (existingIndex >= 0) {
-      data[existingIndex] = lesson;
-    } else {
-      data.push(lesson);
-    }
-    localStorage.setItem(STORAGE_KEYS.LESSONS, JSON.stringify(data));
+    const idx = data.findIndex(l => l.id === lesson.id);
+    if (idx >= 0) data[idx] = lesson; else data.push(lesson);
+    safeJsonSet(STORAGE_KEYS.LESSONS, data);
   },
   deleteLesson: (id: string) => {
-    const data = StorageService.getLessons().filter(l => l.id !== id);
-    localStorage.setItem(STORAGE_KEYS.LESSONS, JSON.stringify(data));
+    safeJsonSet(STORAGE_KEYS.LESSONS, StorageService.getLessons().filter(l => l.id !== id));
   },
 
-  // --- Posts ---
-  getPosts: (): WallPost[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.POSTS) || '[]'),
+  getPosts: (): WallPost[] => safeJsonParse(STORAGE_KEYS.POSTS, []),
   savePost: (post: WallPost) => {
     const data = StorageService.getPosts();
-    const existingIndex = data.findIndex(p => p.id === post.id);
-    if (existingIndex >= 0) {
-      data[existingIndex] = post;
-    } else {
-      data.unshift(post); // Newest first
-    }
-    localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(data));
+    const idx = data.findIndex(p => p.id === post.id);
+    if (idx >= 0) data[idx] = post; else data.unshift(post);
+    safeJsonSet(STORAGE_KEYS.POSTS, data);
   },
   deletePost: (id: string) => {
-    const data = StorageService.getPosts().filter(p => p.id !== id);
-    localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(data));
+    safeJsonSet(STORAGE_KEYS.POSTS, StorageService.getPosts().filter(p => p.id !== id));
   },
 
-  // --- Events (Agenda) ---
-  getEvents: (): ChurchEvent[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]'),
+  getEvents: (): ChurchEvent[] => safeJsonParse(STORAGE_KEYS.EVENTS, []),
   saveEvent: (event: ChurchEvent) => {
     const data = StorageService.getEvents();
-    const existingIndex = data.findIndex(e => e.id === event.id);
-    if (existingIndex >= 0) {
-      data[existingIndex] = event;
-    } else {
-      data.push(event);
-    }
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(data));
+    const idx = data.findIndex(e => e.id === event.id);
+    if (idx >= 0) data[idx] = event; else data.push(event);
+    safeJsonSet(STORAGE_KEYS.EVENTS, data);
   },
   deleteEvent: (id: string) => {
-    const data = StorageService.getEvents().filter(e => e.id !== id);
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(data));
+    safeJsonSet(STORAGE_KEYS.EVENTS, StorageService.getEvents().filter(e => e.id !== id));
   },
 
-  // --- Notifications ---
-  getLastSeenMural: (): string => {
-    return localStorage.getItem(STORAGE_KEYS.LAST_SEEN_MURAL) || '1970-01-01T00:00:00.000Z';
-  },
+  getAgendaBanner: (): string | null => safeJsonParse(STORAGE_KEYS.AGENDA_BANNER, null),
+  saveAgendaBanner: (url: string) => safeJsonSet(STORAGE_KEYS.AGENDA_BANNER, url),
+  deleteAgendaBanner: () => localStorage.removeItem(STORAGE_KEYS.AGENDA_BANNER),
+
+  getLastSeenMural: (): string => safeJsonParse(STORAGE_KEYS.LAST_SEEN_MURAL, '1970-01-01T00:00:00.000Z'),
   setLastSeenMural: (dateStr?: string) => {
-    localStorage.setItem(STORAGE_KEYS.LAST_SEEN_MURAL, dateStr || new Date().toISOString());
+    safeJsonSet(STORAGE_KEYS.LAST_SEEN_MURAL, dateStr || new Date().toISOString());
   },
 
-  // --- Users & Authentication ---
-  getUsers: (): User[] => JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]'),
-  
+  getUsers: (): User[] => safeJsonParse(STORAGE_KEYS.USERS, []),
   saveUser: (user: User) => {
     const users = StorageService.getUsers();
-    const existingIndex = users.findIndex(u => u.id === user.id);
-    if (existingIndex >= 0) {
-      users[existingIndex] = user;
-    } else {
-      users.push(user);
-    }
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx >= 0) users[idx] = user; else users.push(user);
+    safeJsonSet(STORAGE_KEYS.USERS, users);
   },
-  
   deleteUser: (id: string) => {
-     const users = StorageService.getUsers().filter(u => u.id !== id);
-     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+     safeJsonSet(STORAGE_KEYS.USERS, StorageService.getUsers().filter(u => u.id !== id));
   },
 
-  // Auth Methods
   login: (email: string, pass: string): User | null => {
       const users = StorageService.getUsers();
-      // Simple strict check (in real app, hash passwords!)
       const user = users.find(u => u.email === email && u.password === pass && u.active);
       if (user) {
-          localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(user));
+          safeJsonSet(STORAGE_KEYS.SESSION, user);
           return user;
       }
       return null;
   },
 
-  logout: () => {
-      localStorage.removeItem(STORAGE_KEYS.SESSION);
+  logout: () => localStorage.removeItem(STORAGE_KEYS.SESSION),
+  getCurrentUser: (): User | null => safeJsonParse(STORAGE_KEYS.SESSION, null),
+  validateToken: (token: string): User | null => StorageService.getUsers().find(u => u.token === token) || null,
+
+  exportAllData: (): string => {
+    const backup: Record<string, any> = {};
+    Object.values(STORAGE_KEYS).forEach(key => {
+      const value = localStorage.getItem(key);
+      if (value) {
+        try {
+          const parsed = JSON.parse(value);
+          backup[key] = parsed;
+        } catch (e) {
+          // If it's a raw string in storage, keep it as raw string
+          backup[key] = value;
+        }
+      }
+    });
+    return JSON.stringify(backup, null, 2);
   },
 
-  getCurrentUser: (): User | null => {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSION) || 'null');
+  importAllData: (jsonData: string) => {
+    try {
+      const backup = JSON.parse(jsonData);
+      Object.keys(backup).forEach(key => {
+        if (Object.values(STORAGE_KEYS).includes(key)) {
+          localStorage.setItem(key, JSON.stringify(backup[key]));
+        }
+      });
+      window.location.reload();
+    } catch (e) {
+      console.error('Falha ao restaurar backup:', e);
+      throw new Error('Arquivo de backup inválido.');
+    }
   },
 
-  // Returns user if token matches and account is inactive (waiting for password setup)
-  validateToken: (token: string): User | null => {
-      const users = StorageService.getUsers();
-      const user = users.find(u => u.token === token);
-      return user || null;
-  }
+  getTheme: (): string => safeJsonParse(STORAGE_KEYS.THEME, 'light'),
+  setTheme: (theme: string) => safeJsonSet(STORAGE_KEYS.THEME, theme)
 };

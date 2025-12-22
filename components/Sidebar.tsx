@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Users, BookCheck, PieChart, Sparkles, LogOut, Menu, X, Camera, MessageCircleHeart, Calendar, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, BookCheck, PieChart, Sparkles, LogOut, Menu, X, Camera, MessageCircleHeart, Calendar, Shield, FileBadge, Sun, Moon, Settings } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import { User } from '../types';
 
@@ -10,11 +10,13 @@ interface SidebarProps {
   isOpen: boolean;
   toggleSidebar: () => void;
   hasUnreadPosts?: boolean;
-  user: User | null; // Pass user to check role
+  user: User | null;
   onLogout: () => void;
+  theme: string;
+  onToggleTheme: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentTab, onNavigate, isOpen, toggleSidebar, hasUnreadPosts, user, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentTab, onNavigate, isOpen, toggleSidebar, hasUnreadPosts, user, onLogout, theme, onToggleTheme }) => {
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -26,7 +28,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, onNavigate, isOpen, toggl
   }, []);
 
   const handleLogoClick = () => {
-    // Only admin can change logo? Assuming yes for safety, or all users. Leaving for all now or check user.role
     if (user?.role === 'admin') {
         fileInputRef.current?.click();
     }
@@ -40,7 +41,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, onNavigate, isOpen, toggl
         const base64String = reader.result as string;
         setLogoUrl(base64String);
         
-        // Save to storage
         const currentSettings = StorageService.getSettings();
         StorageService.saveSettings({
           ...currentSettings,
@@ -57,13 +57,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, onNavigate, isOpen, toggl
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors font-medium relative ${
         currentTab === id 
           ? 'bg-blue-600 text-white shadow-md' 
-          : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+          : 'text-gray-400 hover:bg-gray-800 dark:hover:bg-gray-700 hover:text-white'
       }`}
     >
       {icon}
       <span>{label}</span>
       
-      {/* Notification Dot for Community/Mural */}
       {id === 'community' && hasUnreadPosts && (
         <span className="absolute right-4 w-2.5 h-2.5 bg-red-500 border-2 border-gray-900 rounded-full animate-pulse"></span>
       )}
@@ -72,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, onNavigate, isOpen, toggl
 
   return (
     <>
-      {/* Mobile Overlay - Dark and Semi-transparent */}
+      {/* Mobile Overlay */}
       <div 
         className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
@@ -121,31 +120,40 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, onNavigate, isOpen, toggl
             </button>
           </div>
           
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">EBD Gestor</h1>
-            <p className="text-xs text-gray-500">
-                {user?.name || 'Usuário'} ({user?.role === 'admin' ? 'Admin' : 'Membro'})
-            </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">EBD Gestor</h1>
+              <p className="text-xs text-gray-500">
+                  {user?.name || 'Usuário'}
+              </p>
+            </div>
+            <button 
+              onClick={onToggleTheme}
+              className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-yellow-400 transition-colors"
+              title="Alternar Tema"
+            >
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
           </div>
         </div>
 
-        <nav className="px-4 space-y-2 mt-2">
+        <nav className="px-4 space-y-1 mt-2 overflow-y-auto max-h-[calc(100vh-280px)]">
           <NavItem id="dashboard" label="Dashboard" icon={<LayoutDashboard size={20} />} />
           <NavItem id="attendance" label="Frequência" icon={<BookCheck size={20} />} />
           <NavItem id="community" label="Mural da EBD" icon={<MessageCircleHeart size={20} className="text-pink-400" />} />
           <NavItem id="registry" label="Cadastros" icon={<Users size={20} />} />
+          <NavItem id="certificates" label="Certificados" icon={<FileBadge size={20} className="text-amber-400" />} />
           <NavItem id="calendar" label="Agenda Eclesiástica" icon={<Calendar size={20} className="text-emerald-400" />} />
           <NavItem id="reports" label="Relatórios" icon={<PieChart size={20} />} />
           
           <div className="pt-4 pb-2">
-            <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Inovação</p>
+            <p className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sistema</p>
           </div>
           <NavItem id="ai-planner" label="Planejador IA" icon={<Sparkles size={20} className="text-yellow-400" />} />
-          
-          {/* User Management is now inside "Cadastros" for admins */}
+          <NavItem id="settings" label="Configurações" icon={<Settings size={20} className="text-gray-400" />} />
         </nav>
 
-        <div className="absolute bottom-0 w-full p-4 border-t border-gray-800">
+        <div className="absolute bottom-0 w-full p-4 border-t border-gray-800 bg-gray-900">
           <button 
             onClick={onLogout}
             className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white transition-colors"

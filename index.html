@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -5,11 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EBD Gestor Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+          },
+        },
+      }
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       body {
         font-family: 'Inter', sans-serif;
         background-color: #f3f4f6;
+      }
+      .dark body {
+        background-color: #111827;
       }
       /* Custom scrollbar for webkit */
       ::-webkit-scrollbar {
@@ -19,12 +35,18 @@
       ::-webkit-scrollbar-track {
         background: #f1f1f1; 
       }
+      .dark ::-webkit-scrollbar-track {
+        background: #1f2937;
+      }
       ::-webkit-scrollbar-thumb {
         background: #cbd5e1; 
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8; 
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #4b5563;
       }
 
       /* Animations */
@@ -54,7 +76,8 @@
     "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
     "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
     "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.5.29"
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.5.29",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.48.1"
   }
 }
 </script>

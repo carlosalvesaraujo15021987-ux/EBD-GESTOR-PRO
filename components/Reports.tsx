@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Award, PieChart, Users, Search, Download, FileSpreadsheet, X, Calendar, BookOpen, DollarSign, Eye, Trophy, Filter } from 'lucide-react';
 import { ClassRoom, AttendanceRecord, Student } from '../types';
@@ -39,7 +38,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
       const enrolledCount = activeStudents.length;
       
       // Calculate Total Present ONLY for Active Students AND Unique Per Date
-      // Formula: Absences = (Enrolled * Sessions) - ActivePresent(Unique)
       const uniqueClassPresences = new Set<string>();
       classRecords.forEach(r => {
           r.presentStudentIds.forEach(sid => {
@@ -93,7 +91,7 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         const classRecords = filteredAttendance.filter(r => r.classId === student.classId);
         const totalClasses = classRecords.length;
         
-        // Count UNIQUE dates present, avoiding duplicate counts if record repeated
+        // Count UNIQUE dates present
         const uniqueDatesPresent = new Set(
             classRecords
                 .filter(r => r.presentStudentIds.includes(student.id))
@@ -114,13 +112,12 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         };
       })
       .sort((a, b) => {
-          // Sort by Percentage DESC, then by Total Presences DESC
           if (b.percentage !== a.percentage) return b.percentage - a.percentage;
           return b.presentCount - a.presentCount;
       });
   }, [students, filteredAttendance, classes]);
 
-  // Filtered version for display (Includes Search by Class and LIMIT 6)
+  // Filtered version for display
   const filteredStudentStats = useMemo(() => {
       const lowerTerm = searchTerm.toLowerCase();
       return studentStats
@@ -128,7 +125,7 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
             s.name.toLowerCase().includes(lowerTerm) || 
             s.className.toLowerCase().includes(lowerTerm)
         )
-        .slice(0, 6); // Limit to top 6
+        .slice(0, 3);
   }, [studentStats, searchTerm]);
 
   // Helper for color coding percentage
@@ -147,15 +144,10 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
   // --- Export Functions ---
 
   const handleExportCSV = () => {
-    // CSV Header
     const headers = ['Posição', 'Aluno', 'Classe', 'Matriculados na Classe', 'Presenças', 'Total de Aulas', 'Frequência (%)'];
-    
-    // Map data to rows - Using filteredStudentStats to match screen
     const rows = filteredStudentStats.map((s, index) => {
-      // Find class stats
       const classStat = ranking.find(r => r.name === s.className);
       const enrolled = classStat ? classStat.enrolledCount : 0;
-      
       return [
         (index + 1).toString(),
         s.name,
@@ -167,13 +159,11 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
       ]
     });
 
-    // Create CSV Content
     const csvContent = [
       headers.join(','), 
       ...rows.map(r => r.join(','))
     ].join('\n');
 
-    // Create Blob and Link
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -209,7 +199,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.text('Escola Bíblica Dominical', textStartX, 27);
     
-    // Date Period String
     const formatDate = (d: string) => d.split('-').reverse().join('/');
     const periodStr = startDate || endDate 
         ? `Período: ${startDate ? formatDate(startDate) : 'Início'} até ${endDate ? formatDate(endDate) : 'Hoje'}`
@@ -225,7 +214,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
 
     let startY = 50;
 
-    // Consolidado Classes
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
@@ -244,10 +232,8 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
       styles: { fontSize: 8, cellPadding: 3 },
     });
 
-    // Summary Totals (RELATORIO GERAL)
     let finalY = (doc as any).lastAutoTable.finalY || 100;
 
-    // Check for page break
     if (finalY > pageHeight - 120) {
         doc.addPage();
         finalY = 20;
@@ -255,8 +241,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         finalY += 15;
     }
     
-    // Calculate Comprehensive Totals using RANKING data 
-    // This ensures consistency because ranking data already applied strict unique logic.
     let totalEnrolledOverall = 0;
     let totalPotentialAttendance = 0;
     let totalPresences = 0;
@@ -268,7 +252,7 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
     ranking.forEach(r => {
       totalEnrolledOverall += r.enrolledCount;
       totalPotentialAttendance += (r.sessions * r.enrolledCount);
-      totalPresences += r.totalPresent; // Already unique per date
+      totalPresences += r.totalPresent;
       totalVisitors += r.totalVisitors;
       totalBibles += r.totalBibles;
       totalMagazines += r.totalMagazines;
@@ -290,7 +274,7 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         head: [['Indicador', 'Total']],
         body: [
             ['Total de Matriculados', totalEnrolledOverall.toString()],
-            ['Total de Presenças (Únicas)', totalPresences.toString()],
+            ['Total de Presenças', totalPresences.toString()],
             ['Total de Ausências', totalAbsences.toString()],
             ['Total de Visitantes', totalVisitors.toString()],
             ['Total (Presentes + Visitantes)', totalOverallPeople.toString()],
@@ -300,7 +284,7 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
             ['Frequência Geral (%)', `${globalPercentage.toFixed(2)}%`]
         ],
         theme: 'grid',
-        headStyles: { fillColor: [22, 163, 74], halign: 'center' }, // Green Header
+        headStyles: { fillColor: [22, 163, 74], halign: 'center' },
         columnStyles: {
             0: { fontStyle: 'bold', cellWidth: 100 },
             1: { halign: 'center', fontStyle: 'bold' }
@@ -308,7 +292,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         styles: { fontSize: 10, cellPadding: 4 }
     });
 
-    // Footer
     const totalPages = doc.internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
@@ -325,27 +308,20 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
   };
 
   const handleExportStudentRankingPDF = () => {
-    // 1. Calculate Stats based on FILTERED attendance
-    // AND apply Search Filter
     const lowerTerm = searchTerm.toLowerCase();
     
-    // We get the full calculated list first
     const baseStats = students
       .filter(s => s.active)
       .map(student => {
         const classRecords = filteredAttendance.filter(r => r.classId === student.classId);
         const totalClasses = classRecords.length;
-        
-        // Count UNIQUE dates present
         const uniqueDatesPresent = new Set(
             classRecords
                 .filter(r => r.presentStudentIds.includes(student.id))
                 .map(r => r.date)
         );
         const presentCount = uniqueDatesPresent.size;
-        
         const percentage = totalClasses > 0 ? (presentCount / totalClasses) * 100 : 0;
-        
         return {
           id: student.id,
           name: student.name,
@@ -357,33 +333,25 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         };
       })
       .sort((a, b) => {
-          // Sort by Presence Count DESC, then Percentage DESC
           if (b.presentCount !== a.presentCount) return b.presentCount - a.presentCount;
           return b.percentage - a.percentage;
       });
 
-    // Apply Search Filter to the base list
     const searchedStats = baseStats.filter(s => 
         s.name.toLowerCase().includes(lowerTerm) || 
         s.className.toLowerCase().includes(lowerTerm)
     );
 
-    // Limit to Top 6 for the "General" section (Matching Screen Logic)
-    const top6Stats = searchedStats.slice(0, 6);
-
-    // 2. Generate PDF - LANDSCAPE Mode
     const doc = new jsPDF({ orientation: 'landscape' });
     const settings = StorageService.getSettings();
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
-    
-    const primaryColor = [245, 158, 11]; // Amber 500
-    const secondaryColor = [30, 64, 175]; // Blue 800
+    const primaryColor = [245, 158, 11]; 
+    const secondaryColor = [30, 64, 175]; 
     const grayColor = [100, 116, 139]; 
     const leftMargin = 14;
     const rightMargin = pageWidth - 14;
 
-    // --- Header Helper ---
     const drawHeader = (title: string) => {
         let logoOffset = 0;
         if (settings && settings.logoUrl) {
@@ -394,41 +362,26 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         doc.setFontSize(16);
         doc.setTextColor(30, 41, 59);
         doc.text(settings?.churchName || 'Nome da Igreja', textStartX, 20);
-        
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(14);
         doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
         doc.text(title, textStartX, 27);
-        
-        // Formatted Date Range & Filter Info
         const formatDate = (d: string) => d.split('-').reverse().join('/');
         const rangeText = startDate || endDate 
             ? `Período: ${startDate ? formatDate(startDate) : 'Início'} a ${endDate ? formatDate(endDate) : 'Hoje'}`
             : 'Período: Histórico Completo';
-        
         const filterText = searchTerm ? ` | Filtro: "${searchTerm}"` : '';
-
         doc.setFontSize(10);
         doc.setTextColor(grayColor[0], grayColor[1], grayColor[2]);
         doc.text(`${rangeText}${filterText} • Gerado em: ${new Date().toLocaleDateString()}`, textStartX, 34);
-
         doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
         doc.setLineWidth(0.5);
         doc.line(leftMargin, 42, rightMargin, 42);
     };
 
-    // Draw First Page Header
     drawHeader('Ranking de Presença: Top 3 (Filtrado)');
-
     let currentY = 50;
-
-    // --- SECTION 1: Top 3 Per Class (Filtered) ---
-    // If a search term is active, we only show classes that contain matching students
-    
-    const classesToShow = classes.filter(cls => {
-        // Does this class have any students in the searched list?
-        return searchedStats.some(s => s.classId === cls.id);
-    });
+    const classesToShow = classes.filter(cls => searchedStats.some(s => s.classId === cls.id));
 
     if (classesToShow.length === 0) {
         doc.setFont('helvetica', 'italic');
@@ -437,57 +390,41 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
     }
 
     classesToShow.forEach((cls) => {
-        // Filter students for this class from the SEARCHED list only
-        // This ensures strictly "data replicated in filter"
         const classStudents = searchedStats
             .filter(s => s.classId === cls.id)
             .sort((a, b) => {
                 if (b.presentCount !== a.presentCount) return b.presentCount - a.presentCount;
                 return b.percentage - a.percentage;
             });
-        
-        // Take Top 3 (of the filtered results)
         const top3 = classStudents.slice(0, 3);
-        
         if (top3.length === 0) return; 
-
-        // Check page break logic
         if (currentY > pageHeight - 50) {
             doc.addPage();
             drawHeader('Ranking de Presença: Top 3 (Filtrado) (Cont.)');
             currentY = 50;
         }
-
-        // Class Header Section (Background Bar) - Horizontal Adjusted
-        doc.setFillColor(243, 244, 246); // Light gray
-        doc.rect(leftMargin, currentY, pageWidth - (leftMargin * 2), 8, 'F');
-        
+        doc.setFillColor(243, 244, 246);
+        doc.rect(leftMargin, currentY, pageWidth - (leftMargin * 2), 6, 'F');
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
-        doc.text(`Classe: ${cls.name}`, leftMargin + 2, currentY + 5.5);
-        
-        currentY += 9; 
-
-        // Table for this class
+        doc.text(`CLASSE: ${cls.name.toUpperCase()}`, leftMargin + 2, currentY + 4);
+        currentY += 7; 
         const rows = top3.map((s, index) => {
-            let rankLabel = `${index + 1}º`;
-            // Add Emojis for medals
-            if (index === 0) rankLabel = "🥇 1º Lugar (Ouro)"; 
-            if (index === 1) rankLabel = "🥈 2º Lugar (Prata)";
-            if (index === 2) rankLabel = "🥉 3º Lugar (Bronze)";
-
+            let rankEmoji = '';
+            if (index === 0) rankEmoji = ' 🥇';
+            if (index === 1) rankEmoji = ' 🥈';
+            if (index === 2) rankEmoji = ' 🥉';
             return [
-                rankLabel,
-                s.name,
-                s.presentCount.toString(),
-                `${s.percentage.toFixed(1)}%`
+                cls.name.toUpperCase(),
+                s.name.toUpperCase(),
+                `${index + 1}º${rankEmoji}`,
+                `${s.presentCount} / ${s.percentage.toFixed(0)}%`
             ];
         });
-
         autoTable(doc, {
             startY: currentY,
-            head: [['Posição', 'Nome do Aluno', 'Presenças', 'Freq.']],
+            head: [['CLASSE', 'ALUNO', 'POSIÇÃO', 'FREQ.']],
             body: rows,
             theme: 'grid', 
             headStyles: { 
@@ -496,48 +433,33 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
                 fontStyle: 'bold',
                 lineWidth: 0.1,
                 lineColor: [200, 200, 200],
-                fontSize: 9
+                fontSize: 9,
+                halign: 'left'
             },
-            bodyStyles: {
-                textColor: [50, 50, 50]
-            },
+            bodyStyles: { textColor: [50, 50, 50], fontSize: 9 },
             columnStyles: {
-                0: { fontStyle: 'bold', cellWidth: 50 }, // Rank column width for emoji
+                0: { cellWidth: 70, fontStyle: 'bold' }, 
                 1: { cellWidth: 'auto' }, 
-                2: { halign: 'center', cellWidth: 40, fontStyle: 'bold' },
+                2: { halign: 'left', cellWidth: 40, fontStyle: 'bold' },
                 3: { halign: 'center', cellWidth: 30 }
             },
             didParseCell: (data) => {
-                // Color Code the Medals
-                if (data.section === 'body' && data.column.index === 0) {
+                if (data.section === 'body' && data.column.index === 2) {
                     const text = data.cell.raw as string;
-                    if (text.includes('1º')) {
-                        data.cell.styles.textColor = [218, 165, 32]; // Gold Color
-                    } else if (text.includes('2º')) {
-                        data.cell.styles.textColor = [128, 128, 128]; // Silver Color
-                    } else if (text.includes('3º')) {
-                        data.cell.styles.textColor = [160, 82, 45]; // Bronze Color
-                    }
+                    if (text.includes('1º')) data.cell.styles.textColor = [218, 165, 32];
+                    else if (text.includes('2º')) data.cell.styles.textColor = [128, 128, 128];
+                    else if (text.includes('3º')) data.cell.styles.textColor = [160, 82, 45];
                 }
             },
-            styles: { 
-                fontSize: 9, 
-                cellPadding: 2,
-                lineColor: [230, 230, 230],
-                lineWidth: 0.1
-            },
+            styles: { cellPadding: 2, lineColor: [230, 230, 230], lineWidth: 0.1 },
             margin: { left: leftMargin, right: rightMargin }
         });
-
-        // Update Y for next loop
         currentY = (doc as any).lastAutoTable.finalY + 8;
     });
 
-    // --- SECTION 2: General Ranking (Top 6 Filtered) (New Page) ---
     doc.addPage();
-    drawHeader('Ranking Geral de Frequência (Top 6 Filtrado)');
-
-    const generalRows = top6Stats.map((s, index) => [
+    drawHeader('Ranking Geral de Frequência (Filtrado)');
+    const generalRows = searchedStats.map((s, index) => [
       `${index + 1}º`,
       s.name,
       s.className,
@@ -546,8 +468,8 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
       `${s.percentage.toFixed(1)}%`
     ]);
 
-    if (top6Stats.length === 0) {
-         doc.text("Nenhum dado para exibir.", leftMargin, 60);
+    if (searchedStats.length === 0) {
+         doc.text("Nenhum dado para exibir com os filtros atuais.", leftMargin, 60);
     } else {
         autoTable(doc, {
         startY: 50,
@@ -566,7 +488,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         });
     }
 
-    // --- Footer for all pages ---
     const totalPages = doc.internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
@@ -574,15 +495,12 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         doc.line(leftMargin, pageHeight - 20, rightMargin, pageHeight - 20);
         doc.setFontSize(8);
         doc.setTextColor(100);
-        
         const address = settings?.address || 'Endereço não cadastrado';
         doc.text(address, pageWidth / 2, pageHeight - 15, { align: 'center' });
-        
         doc.text(`Página ${i} de ${totalPages}`, leftMargin, pageHeight - 10);
         doc.text('Créditos: Carlos Alves de Araujo - EBD Gestor Pro', rightMargin, pageHeight - 10, { align: 'right' });
     }
-
-    doc.save(`ranking_ebd_top6_${startDate || 'busca'}.pdf`);
+    doc.save(`ranking_ebd_filtrado_${startDate || 'busca'}.pdf`);
   };
 
   return (
@@ -594,7 +512,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         </h2>
       </div>
 
-      {/* Date Filters Bar */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-wrap items-end gap-4">
         <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Inicial</label>
@@ -625,7 +542,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         </div>
       </div>
 
-      {/* Comprehensive Summary Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -686,14 +602,12 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
         </div>
       </div>
       
-      {/* Student Frequency Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Users size={20} className="text-blue-600" />
             <h3 className="font-bold text-lg text-gray-800">Frequência Individual</h3>
           </div>
-          
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             <input 
@@ -705,7 +619,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
             />
           </div>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
@@ -755,37 +668,26 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
             </tbody>
           </table>
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-500 text-center">
-             Exibindo os top 6 resultados da busca. Para ver todos, exporte o relatório.
+             Exibindo os top 3 resultados da busca. Para ver todos, exporte o relatório.
           </div>
         </div>
       </div>
       
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-800 mb-4">Exportar Dados</h3>
-        <p className="text-sm text-gray-500 mb-4">Baixe os relatórios completos para análise.</p>
         <div className="flex flex-wrap gap-3">
-          <button 
-            onClick={handleExportCSV}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
-          >
+          <button onClick={handleExportCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2">
             <FileSpreadsheet size={16} /> Exportar Excel (CSV)
           </button>
-          <button 
-            onClick={handleExportPDF}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
+          <button onClick={handleExportPDF} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2">
             <Download size={16} /> Relatório Geral (PDF)
           </button>
-          <button 
-            onClick={handleExportStudentRankingPDF}
-            className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors flex items-center gap-2"
-          >
+          <button onClick={handleExportStudentRankingPDF} className="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors flex items-center gap-2">
             <Trophy size={16} /> Ranking Top 3 + Geral (Filtrado)
           </button>
         </div>
       </div>
 
-      {/* Class Details Modal */}
       {selectedClass && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -794,16 +696,11 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
                 <h3 className="text-xl font-bold text-gray-800">{selectedClass.name}</h3>
                 <p className="text-sm text-gray-500">Histórico de Aulas e Observações {startDate && `(${startDate} - ${endDate || 'Hoje'})`}</p>
               </div>
-              <button 
-                onClick={() => setSelectedClass(null)}
-                className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-2 rounded-full transition-colors"
-              >
+              <button onClick={() => setSelectedClass(null)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-2 rounded-full transition-colors">
                 <X size={24} />
               </button>
             </div>
-            
             <div className="overflow-auto p-6">
-              {/* Stats Summary for Class */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <p className="text-xs text-blue-500 font-bold uppercase">Total Ofertas</p>
@@ -822,7 +719,6 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
                   <p className="text-xl font-bold text-purple-700">{(selectedClass as any).avgAttendance.toFixed(1)}</p>
                 </div>
               </div>
-
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-100 text-gray-600 font-semibold uppercase text-xs">
                   <tr>
@@ -846,29 +742,19 @@ const Reports: React.FC<ReportsProps> = ({ classes, attendance, students }) => {
                         <td className="px-4 py-3 text-center text-gray-600">{record.biblesCount}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{record.magazinesCount}</td>
                         <td className="px-4 py-3 text-right font-medium text-green-600">R$ {record.offeringValue.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-gray-500 italic text-xs">
-                          {record.notes ? record.notes : '-'}
-                        </td>
+                        <td className="px-4 py-3 text-gray-500 italic text-xs">{record.notes || '-'}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                        Nenhum registro de aula encontrado para esta classe no período selecionado.
-                      </td>
+                      <td colSpan={6} className="px-4 py-8 text-center text-gray-400">Nenhum registro de aula encontrado.</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-            
             <div className="p-4 border-t border-gray-100 bg-gray-50 rounded-b-xl flex justify-end">
-              <button 
-                onClick={() => setSelectedClass(null)}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-medium"
-              >
-                Fechar
-              </button>
+              <button onClick={() => setSelectedClass(null)} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-medium">Fechar</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Lock, Mail, Key, UserCheck, ArrowRight, BookOpen } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Lock, Mail, Key, UserCheck, ArrowRight, BookOpen, Camera } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import { User } from '../types';
 
@@ -12,7 +12,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'first_access'>('login');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [churchName, setChurchName] = useState('');
+  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Login State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,6 +32,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       if (settings) {
           if (settings.logoUrl) setLogoUrl(settings.logoUrl);
           if (settings.churchName) setChurchName(settings.churchName);
+          if (settings.loginBackgroundUrl) setBackgroundUrl(settings.loginBackgroundUrl);
       }
   }, []);
 
@@ -87,14 +91,71 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       onLoginSuccess(updatedUser);
   };
 
+  const handleBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          // Limit size 3MB
+          if (file.size > 3 * 1024 * 1024) {
+              alert('A imagem é muito grande (Máx 3MB).');
+              return;
+          }
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              const result = reader.result as string;
+              setBackgroundUrl(result);
+              
+              // Persist to Settings
+              const currentSettings = StorageService.getSettings();
+              StorageService.saveSettings({
+                  ...currentSettings,
+                  loginBackgroundUrl: result
+              });
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col">
         {/* Header Personalizado */}
-        <div className="bg-gradient-to-b from-blue-600 to-blue-700 p-8 text-center text-white relative overflow-hidden">
-           {/* Decorative Circles */}
-           <div className="absolute top-[-20px] left-[-20px] w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-           <div className="absolute bottom-[-20px] right-[-20px] w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
+        <div 
+          className={`p-8 text-center text-white relative overflow-hidden transition-all duration-500 group ${!backgroundUrl ? 'bg-gradient-to-b from-blue-600 to-blue-700' : ''}`}
+          style={backgroundUrl ? { 
+              backgroundImage: `url(${backgroundUrl})`, 
+              backgroundSize: 'cover', 
+              backgroundPosition: 'center' 
+          } : {}}
+        >
+           {/* Overlay for readability if image is present */}
+           {backgroundUrl && <div className="absolute inset-0 bg-black/50 z-0"></div>}
+           
+           {/* Decorative Circles (only if no image) */}
+           {!backgroundUrl && (
+             <>
+               <div className="absolute top-[-20px] left-[-20px] w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+               <div className="absolute bottom-[-20px] right-[-20px] w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
+             </>
+           )}
+           
+           {/* Edit Background Button (Visible on Hover) */}
+           <div className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+               <input 
+                   type="file" 
+                   ref={fileInputRef}
+                   onChange={handleBackgroundUpload}
+                   className="hidden"
+                   accept="image/*"
+               />
+               <button 
+                   onClick={() => fileInputRef.current?.click()}
+                   className="bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition-all"
+                   title="Alterar capa"
+               >
+                   <Camera size={16} />
+               </button>
+           </div>
 
            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-blue-400/30 overflow-hidden relative z-10">
               {logoUrl ? (
@@ -134,13 +195,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         {/* Content */}
         <div className="p-8">
             {error && (
-                <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4 text-center border border-red-100">
+                <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4 text-center border border-red-100 animate-fade-in">
                     {error}
                 </div>
             )}
 
             {activeTab === 'login' && (
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-4 animate-fade-in">
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
                         <div className="relative">
@@ -183,7 +244,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             )}
 
             {activeTab === 'first_access' && !tokenUser && (
-                <div className="space-y-4">
+                <div className="space-y-4 animate-fade-in">
                     <p className="text-sm text-gray-600 text-center mb-2">
                         Insira o token fornecido pelo administrador para criar sua senha.
                     </p>

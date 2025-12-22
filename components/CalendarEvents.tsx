@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, MapPin, Clock, Plus, Trash2, Edit2, X, AlertCircle } from 'lucide-react';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar as CalendarIcon, MapPin, Clock, Plus, Trash2, Edit2, X, AlertCircle, Share2, Camera, Eraser } from 'lucide-react';
 import { ChurchEvent } from '../types';
 import { StorageService } from '../services/storage';
 
@@ -9,6 +10,10 @@ const CalendarEvents: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   
+  // Banner State
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
   // Edit/Create State
   const [formData, setFormData] = useState<Partial<ChurchEvent>>({ 
     scope: 'local', 
@@ -18,6 +23,8 @@ const CalendarEvents: React.FC = () => {
 
   useEffect(() => {
     refreshEvents();
+    const storedBanner = StorageService.getAgendaBanner();
+    if (storedBanner) setBannerUrl(storedBanner);
   }, []);
 
   const refreshEvents = () => {
@@ -72,6 +79,113 @@ const CalendarEvents: React.FC = () => {
     }
   };
 
+  // --- Banner Logic ---
+  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.size > 3 * 1024 * 1024) { // 3MB limit
+              alert('A imagem é muito grande. Use uma imagem menor que 3MB.');
+              return;
+          }
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              const result = reader.result as string;
+              setBannerUrl(result);
+              StorageService.saveAgendaBanner(result);
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleRemoveBanner = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (window.confirm('Deseja remover o banner personalizado e voltar ao padrão?')) {
+          setBannerUrl(null);
+          StorageService.deleteAgendaBanner();
+      }
+  };
+
+  // --- Sharing Logic ---
+  const handleShareAgenda = async (monthTitle: string, monthEvents: ChurchEvent[]) => {
+      const settings = StorageService.getSettings();
+      const churchName = settings?.churchName || 'Igreja';
+
+      let text = `📅 *AGENDA MENSAL - ${monthTitle.toUpperCase()}*\n`;
+      text += `📍 *${churchName}*\n\n`;
+
+      // Sort by day again just to be safe
+      const sortedEvents = [...monthEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      sortedEvents.forEach(event => {
+          const [year, month, day] = event.date.split('-');
+          const categoryEmoji = {
+              culto: '🙏',
+              simposio: '🎓',
+              confraternizacao: '🎉',
+              reuniao: '💼',
+              outro: '🗓️'
+          }[event.category] || '🗓️';
+
+          text += `${categoryEmoji} *Dia ${day}/${month}* - ${event.time || '??:??'}\n`;
+          text += `🔹 *${event.title}*\n`;
+          text += `📍 ${event.location}\n`;
+          text += `------------------------------\n`;
+      });
+
+      text += `\n📲 _Gerado via EBD Gestor Pro_`;
+
+      if (navigator.share) {
+          try {
+              await navigator.share({
+                  title: `Agenda ${monthTitle}`,
+                  text: text
+              });
+          } catch (err) {
+              console.log('User cancelled share');
+          }
+      } else {
+          navigator.clipboard.writeText(text);
+          alert('Agenda copiada para a área de transferência! Cole no WhatsApp.');
+      }
+  };
+
+  const handleShareEvent = async (event: ChurchEvent) => {
+      const settings = StorageService.getSettings();
+      const churchName = settings?.churchName || 'Igreja';
+      const [year, month, day] = event.date.split('-');
+
+      const categoryEmoji = {
+          culto: '🙏',
+          simposio: '🎓',
+          confraternizacao: '🎉',
+          reuniao: '💼',
+          outro: '🗓️'
+      }[event.category] || '🗓️';
+
+      let text = `📅 *CONVITE ESPECIAL*\n\n`;
+      text += `${categoryEmoji} *${event.title.toUpperCase()}*\n`;
+      text += `📍 *${churchName}*\n\n`;
+      text += `🗓️ Data: *${day}/${month}/${year}*\n`;
+      text += `⏰ Horário: *${event.time || 'A definir'}*\n`;
+      text += `📌 Local: ${event.location}\n`;
+      if (event.description) text += `\n📝 ${event.description}\n`;
+      text += `\nVenha participar conosco!`;
+
+      if (navigator.share) {
+          try {
+              await navigator.share({
+                  title: event.title,
+                  text: text
+              });
+          } catch (err) {
+              console.log('User cancelled share');
+          }
+      } else {
+          navigator.clipboard.writeText(text);
+          alert('Convite copiado para a área de transferência!');
+      }
+  };
+
   const filteredEvents = events.filter(e => {
     if (filterScope === 'all') return true;
     return e.scope === filterScope;
@@ -106,18 +220,55 @@ const CalendarEvents: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in pb-20">
-       {/* Header */}
-       <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-8 rounded-2xl shadow-lg text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
+       {/* Header with Banner Upload */}
+       <div className={`relative rounded-2xl shadow-lg overflow-hidden group min-h-[180px] flex flex-col justify-center transition-all ${!bannerUrl ? 'bg-gradient-to-r from-blue-700 to-indigo-800' : ''}`}>
+          {bannerUrl && (
+              <>
+                 <img src={bannerUrl} alt="Banner Agenda" className="absolute inset-0 w-full h-full object-cover z-0 transition-transform group-hover:scale-105 duration-700" />
+                 <div className="absolute inset-0 bg-black/50 z-0"></div>
+              </>
+          )}
+          
+          <div className="relative z-10 p-8 text-white">
+            <h2 className="text-3xl font-bold flex items-center gap-3 drop-shadow-md">
               <CalendarIcon className="text-blue-300" />
               Agenda Eclesiástica
             </h2>
-            <p className="opacity-80 mt-2 max-w-xl">
-              Acompanhe simpósios, confraternizações e eventos do Campo ADMSJP e da Igreja Local.
+            <p className="opacity-90 mt-2 max-w-xl text-blue-50 leading-relaxed font-medium">
+              Acompanhe simpósios, confraternizações e eventos do Campo ADMSJP e da Igreja Local. Explore o cronograma e participe!
             </p>
           </div>
-          <CalendarIcon className="absolute -bottom-10 -right-10 w-64 h-64 opacity-5 rotate-12" />
+          
+          {!bannerUrl && <CalendarIcon className="absolute -bottom-10 -right-10 w-64 h-64 opacity-5 rotate-12 z-0 text-white" />}
+
+          {/* Banner Controls */}
+          <div className="absolute bottom-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+             <input 
+                type="file" 
+                ref={bannerInputRef} 
+                onChange={handleBannerUpload} 
+                accept="image/*" 
+                className="hidden" 
+             />
+             
+             {bannerUrl && (
+                <button 
+                   onClick={handleRemoveBanner}
+                   className="bg-red-500/80 hover:bg-red-600 text-white p-2.5 rounded-full backdrop-blur-sm transition-all shadow-md border border-white/10"
+                   title="Remover Banner"
+                >
+                   <Eraser size={18} />
+                </button>
+             )}
+
+             <button 
+                onClick={() => bannerInputRef.current?.click()}
+                className="bg-blue-600/80 hover:bg-blue-600 text-white p-2.5 rounded-full backdrop-blur-sm transition-all shadow-md border border-white/10"
+                title="Alterar Imagem de Capa"
+             >
+                <Camera size={18} />
+             </button>
+          </div>
        </div>
 
        {/* Filters & Actions */}
@@ -163,16 +314,31 @@ const CalendarEvents: React.FC = () => {
                   <p className="text-gray-500 font-medium">Nenhum evento agendado para este filtro.</p>
               </div>
           ) : (
-            Object.keys(groupedEvents).map(monthYear => (
-                <div key={monthYear} className="space-y-4">
-                    <h3 className="text-lg font-bold text-gray-700 sticky top-0 bg-gray-50/90 backdrop-blur-sm py-2 z-10 px-2 rounded-lg border-l-4 border-blue-500 pl-3">
-                        {monthYear}
-                    </h3>
+            Object.keys(groupedEvents).map((monthYear, index) => (
+                <div 
+                    key={monthYear} 
+                    className="space-y-4 animate-fade-in"
+                    style={{ animationDelay: `${index * 150}ms`, opacity: 0, animationFillMode: 'forwards' }}
+                >
+                    {/* Month Header with Share Button */}
+                    <div className="sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10 py-2 px-3 rounded-lg border-l-4 border-blue-500 flex justify-between items-center shadow-sm">
+                        <h3 className="text-lg font-bold text-gray-700 pl-2">
+                            {monthYear}
+                        </h3>
+                        <button
+                            onClick={() => handleShareAgenda(monthYear, groupedEvents[monthYear])}
+                            className="flex items-center gap-2 text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors text-sm font-bold"
+                            title="Compartilhar Agenda Completa deste Mês"
+                        >
+                            <Share2 size={16} /> <span className="hidden sm:inline">Agenda Mensal</span>
+                        </button>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {groupedEvents[monthYear].map(event => {
                             const [year, month, day] = event.date.split('-');
                             return (
-                                <div key={event.id} className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
+                                <div key={event.id} className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow overflow-hidden flex flex-col group relative">
                                     <div className={`h-1.5 w-full ${event.scope === 'campo' ? 'bg-blue-600' : 'bg-emerald-500'}`}></div>
                                     <div className="p-5 flex-1">
                                         <div className="flex justify-between items-start mb-3">
@@ -181,6 +347,14 @@ const CalendarEvents: React.FC = () => {
                                                 <span className="text-[10px] uppercase font-bold text-gray-500">{month}/{year.slice(2)}</span>
                                             </div>
                                             <div className="flex gap-1">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => handleShareEvent(event)} 
+                                                    className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"
+                                                    title="Compartilhar este evento"
+                                                >
+                                                    <Share2 size={16}/>
+                                                </button>
                                                 <button type="button" onClick={() => handleOpenModal(event)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"><Edit2 size={16}/></button>
                                                 <button type="button" onClick={() => handleDeleteClick(event.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={16}/></button>
                                             </div>
