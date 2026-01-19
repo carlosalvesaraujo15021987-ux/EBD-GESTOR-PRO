@@ -21,7 +21,7 @@ const STORAGE_KEYS = {
 
 const APP_METADATA = {
   name: "EBD Gestor Pro",
-  version: "2.1.0"
+  version: "2.1.1"
 };
 
 const initialSettings: ChurchSettings = {
@@ -203,7 +203,7 @@ export const StorageService = {
 
   importAllData: (jsonData: string) => {
     try {
-      const data = JSON.parse(jsonData);
+      const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
       if (!data || !data.content) throw new Error('Formato de backup inválido.');
       Object.entries(data.content).forEach(([key, value]) => {
         localStorage.setItem(key, JSON.stringify(value));
@@ -221,21 +221,30 @@ export const StorageService = {
     if (!user) return { success: false, message: 'Usuário não autenticado.' };
 
     try {
-      const payload = StorageService.exportAllData();
+      // Exporta os dados atuais para um objeto
+      const fullData = JSON.parse(StorageService.exportAllData());
       
       const { error } = await supabase
         .from('ebd_backups')
         .upsert({ 
           email: user.email.toLowerCase(), 
-          payload: JSON.parse(payload),
+          payload: fullData,
           updated_at: new Date().toISOString()
         }, { onConflict: 'email' });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase Upsert Error Object:', error);
+        const detailedMessage = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.trim();
+        return { 
+          success: false, 
+          message: 'Erro no Supabase: ' + (detailedMessage || 'Verifique se a tabela ebd_backups existe e se as permissões (RLS) estão corretas.') 
+        };
+      }
+      
       return { success: true, message: 'Dados sincronizados com sucesso na nuvem!' };
     } catch (e: any) {
-      console.error('Supabase Sync Error:', e);
-      return { success: false, message: 'Erro ao sincronizar: ' + (e.message || 'Verifique se a tabela ebd_backups existe no seu Supabase.') };
+      console.error('Supabase Unexpected Catch Error:', e);
+      return { success: false, message: 'Erro de conexão: Verifique sua internet ou as configurações do projeto Supabase.' };
     }
   },
 
@@ -248,16 +257,25 @@ export const StorageService = {
         .from('ebd_backups')
         .select('payload')
         .eq('email', user.email.toLowerCase())
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
-      if (!data) return { success: false, message: 'Nenhum backup encontrado na nuvem para este usuário.' };
+      if (error) {
+        console.error('Supabase Select Error Object:', error);
+        const detailedMessage = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.trim();
+        return { 
+          success: false, 
+          message: 'Erro ao buscar na nuvem: ' + (detailedMessage || 'Falha na consulta ao banco de dados.') 
+        };
+      }
 
-      StorageService.importAllData(JSON.stringify(data.payload));
+      if (!data || !data.payload) return { success: false, message: 'Nenhum backup encontrado na nuvem para este usuário.' };
+
+      // ImportAllData recarregará a página
+      StorageService.importAllData(data.payload);
       return { success: true, message: 'Dados restaurados da nuvem com sucesso!' };
     } catch (e: any) {
-      console.error('Supabase Restore Error:', e);
-      return { success: false, message: 'Erro ao restaurar: ' + (e.message || 'Verifique se a tabela ebd_backups existe no seu Supabase.') };
+      console.error('Supabase Unexpected Restore Catch Error:', e);
+      return { success: false, message: 'Erro ao restaurar: Verifique sua internet ou as configurações do Supabase.' };
     }
   }
 };
