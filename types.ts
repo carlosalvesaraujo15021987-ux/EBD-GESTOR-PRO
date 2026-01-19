@@ -28,8 +28,9 @@ export interface AttendanceRecord {
   id: string; // Unique ID for the record (date + class)
   date: string;
   classId: string;
+  registeredByTeacherId?: string; 
   presentStudentIds: string[];
-  justifications?: { [studentId: string]: string }; // Map of studentId -> justification text
+  justifications?: { [studentId: string]: string }; 
   visitorsCount: number;
   biblesCount: number;
   magazinesCount: number;
@@ -37,18 +38,20 @@ export interface AttendanceRecord {
   notes?: string;
 }
 
-// For the AI Lesson Planner
 export interface LessonPlan {
   topic: string;
   content: string;
 }
 
+export type ThemePalette = 'blue' | 'emerald' | 'violet' | 'rose' | 'amber' | 'indigo' | 'teal' | 'slate';
+
 export interface ChurchSettings {
   churchName: string;
   address: string;
   logoUrl?: string;
-  loginBackgroundUrl?: string; // New field for login cover image
-  certificateLogoUrl?: string; // Specific logo for certificates
+  loginBackgroundUrl?: string; 
+  certificateLogoUrl?: string; 
+  themePalette?: ThemePalette;
   leadership: {
     pastorPresidente: string;
     dirigentes: string;
@@ -60,11 +63,11 @@ export interface ChurchSettings {
 
 export interface QuarterlyLesson {
   id: string;
-  title: string; // ex: Adultos - Lição 1
-  category: string; // Adultos, Jovens, etc
+  title: string; 
+  category: string; 
   goldenText: string;
   dailyReading: string;
-  pdfUrl?: string; // Simulated link
+  pdfUrl?: string; 
   dateAdded: string;
 }
 
@@ -80,24 +83,23 @@ export interface WallPost {
 export interface ChurchEvent {
   id: string;
   title: string;
-  date: string; // YYYY-MM-DD
-  time?: string; // HH:MM
+  date: string; 
+  time?: string; 
   description?: string;
   location: string;
-  scope: 'local' | 'campo'; // Local Church or Region (ADMSJP)
+  scope: 'local' | 'campo'; 
   category: 'confraternizacao' | 'simposio' | 'culto' | 'reuniao' | 'outro';
 }
 
-// --- Authentication Types ---
 export type UserRole = 'admin' | 'user';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // Optional because initially it might just be a token invite
+  password?: string; 
   role: UserRole;
-  token: string; // The invite/first-access token
-  active: boolean; // True after they set a password
+  token: string; 
+  active: boolean; 
   createdAt: string;
 }

@@ -1,13 +1,7 @@
-
 import { GoogleGenAI } from "@google/genai";
 
-const apiKey = process.env.API_KEY || ''; 
-const ai = new GoogleGenAI({ apiKey });
-
 export const generateLessonPlan = async (topic: string, ageGroup: string, context?: string): Promise<string> => {
-  if (!apiKey) {
-    return "Erro: Chave de API não configurada (API_KEY).";
-  }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   try {
     const prompt = `
@@ -37,6 +31,31 @@ export const generateLessonPlan = async (topic: string, ageGroup: string, contex
     return response.text || "Não foi possível gerar o conteúdo.";
   } catch (error) {
     console.error("Erro ao chamar Gemini API:", error);
-    return "Ocorreu um erro ao tentar gerar a aula. Verifique sua conexão ou tente novamente.";
+    return "Ocorreu um erro ao tentar gerar a aula.";
+  }
+};
+
+export const getSimeparWeather = async (date: string): Promise<{ text: string; sources: any[] }> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  try {
+    const prompt = `Qual a condição do tempo (ex: bom, chuvoso, ameaçador, nublado) e temperatura no bairro Guatupê, São José dos Pinhais - PR hoje (${date}) de acordo com informações do Simepar? Responda de forma curta e objetiva.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      },
+    });
+
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    return { 
+      text: response.text || "Informação indisponível", 
+      sources 
+    };
+  } catch (error) {
+    console.error("Erro ao buscar clima:", error);
+    return { text: "Erro ao consultar o Simepar.", sources: [] };
   }
 };

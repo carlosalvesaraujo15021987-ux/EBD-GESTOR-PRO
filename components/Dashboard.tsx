@@ -27,7 +27,7 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
   </div>
 );
 
-type FilterType = 'day' | 'month' | 'year';
+type FilterType = 'day' | 'month' | 'quarter' | 'year';
 
 const Dashboard: React.FC<DashboardProps> = ({ students, attendance, classes }) => {
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
@@ -47,12 +47,23 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, classes }) 
         return r.date === selectedDate;
       }
       if (filterType === 'month') {
-        // Match YYYY-MM
         return r.date.startsWith(selectedDate.substring(0, 7));
       }
       if (filterType === 'year') {
-        // Match YYYY
         return r.date.startsWith(selectedDate.substring(0, 4));
+      }
+      if (filterType === 'quarter') {
+        const date = new Date(selectedDate);
+        const year = date.getFullYear();
+        const quarter = Math.floor(date.getMonth() / 3);
+        const startMonth = quarter * 3;
+        const endMonth = startMonth + 2;
+        
+        const rDate = new Date(r.date + 'T00:00:00');
+        const rYear = rDate.getFullYear();
+        const rMonth = rDate.getMonth();
+        
+        return rYear === year && rMonth >= startMonth && rMonth <= endMonth;
       }
       return true;
     });
@@ -116,6 +127,23 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, classes }) 
             });
             return { name: m, total: uniqueMonthPresences.size };
         });
+    } else if (filterType === 'quarter') {
+        const date = new Date(selectedDate);
+        const quarter = Math.floor(date.getMonth() / 3);
+        const startMonth = quarter * 3;
+        const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        for (let i = 0; i < 3; i++) {
+            const mIdx = startMonth + i;
+            const monthStr = (mIdx + 1).toString().padStart(2, '0');
+            const match = `${date.getFullYear()}-${monthStr}`;
+            const monthRecords = filteredAttendance.filter(r => r.date.startsWith(match));
+            const uniqueMonthPresences = new Set<string>();
+            monthRecords.forEach(r => {
+                r.presentStudentIds.forEach(sid => uniqueMonthPresences.add(`${r.date}-${sid}`));
+            });
+            trendData.push({ name: monthsNames[mIdx], total: uniqueMonthPresences.size });
+        }
     } else if (filterType === 'month') {
         const year = parseInt(selectedDate.split('-')[0]);
         const month = parseInt(selectedDate.split('-')[1]);
@@ -154,6 +182,7 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, classes }) 
     const d = new Date(selectedDate);
     if (filterType === 'day') d.setDate(d.getDate() - 1);
     if (filterType === 'month') d.setMonth(d.getMonth() - 1);
+    if (filterType === 'quarter') d.setMonth(d.getMonth() - 3);
     if (filterType === 'year') d.setFullYear(d.getFullYear() - 1);
     setSelectedDate(d.toISOString().split('T')[0]);
   };
@@ -162,19 +191,25 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, classes }) 
     const d = new Date(selectedDate);
     if (filterType === 'day') d.setDate(d.getDate() + 1);
     if (filterType === 'month') d.setMonth(d.getMonth() + 1);
+    if (filterType === 'quarter') d.setMonth(d.getMonth() + 3);
     if (filterType === 'year') d.setFullYear(d.getFullYear() + 1);
     setSelectedDate(d.toISOString().split('T')[0]);
   };
 
   const getFilterLabel = () => {
+      const d = new Date(selectedDate);
       if (filterType === 'day') {
-          const [y, m, d] = selectedDate.split('-');
-          return `${d}/${m}/${y}`;
+          const [y, m, d_val] = selectedDate.split('-');
+          return `${d_val}/${m}/${y}`;
       }
       if (filterType === 'month') {
           const [y, m] = selectedDate.split('-');
           const monthName = new Date(parseInt(y), parseInt(m)-1).toLocaleString('pt-BR', { month: 'long' });
           return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${y}`;
+      }
+      if (filterType === 'quarter') {
+          const quarter = Math.floor(d.getMonth() / 3) + 1;
+          return `${quarter}º Trimestre ${d.getFullYear()}`;
       }
       return selectedDate.split('-')[0]; // Year
   };
@@ -197,7 +232,8 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, classes }) 
            {/* Type Select */}
            <div className="flex bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
               <button onClick={() => setFilterType('day')} className={`px-3 py-1.5 text-sm font-medium transition-colors ${filterType === 'day' ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>Dia</button>
-              <button onClick={() => setFilterType('month')} className={`px-3 py-1.5 text-sm font-medium transition-colors border-l border-r border-gray-200 dark:border-gray-600 ${filterType === 'month' ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>Mês</button>
+              <button onClick={() => setFilterType('month')} className={`px-3 py-1.5 text-sm font-medium transition-colors border-l border-gray-200 dark:border-gray-600 ${filterType === 'month' ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>Mês</button>
+              <button onClick={() => setFilterType('quarter')} className={`px-3 py-1.5 text-sm font-medium transition-colors border-l border-r border-gray-200 dark:border-gray-600 ${filterType === 'quarter' ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>Trimestre</button>
               <button onClick={() => setFilterType('year')} className={`px-3 py-1.5 text-sm font-medium transition-colors ${filterType === 'year' ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>Ano</button>
            </div>
 
@@ -297,7 +333,9 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, classes }) 
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
                     {filterType === 'day' ? 'Comparativo do Dia' : 'Evolução Temporal'}
                 </h3>
-                <span className="text-xs bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200 px-2 py-1 rounded font-bold uppercase">{filterType === 'year' ? 'Mensal' : (filterType === 'month' ? 'Diária' : 'Por Classe')}</span>
+                <span className="text-xs bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-200 px-2 py-1 rounded font-bold uppercase">
+                    {filterType === 'year' ? 'Mensal' : (filterType === 'quarter' ? 'Trimestral' : (filterType === 'month' ? 'Diária' : 'Por Classe'))}
+                </span>
             </div>
             <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">

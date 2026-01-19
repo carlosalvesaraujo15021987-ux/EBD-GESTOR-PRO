@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Search, AlertCircle, RefreshCw, UserX, CheckCircle, X, Upload, Download, FileText } from 'lucide-react';
 import { Student, Teacher, ClassRoom, User } from '../types';
 import { StorageService } from '../services/storage';
@@ -22,6 +22,9 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Selection state for bulk delete
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // Delete Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
@@ -30,6 +33,11 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
 
   // Import State
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset selection when tab or status changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [activeTab, studentStatusTab]);
 
   const handleOpenModal = (data?: any) => {
     if (data) {
@@ -41,8 +49,6 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
   };
 
   const handleSave = () => {
-    // Validation check can be added here if needed
-    
     const id = formData.id || Math.random().toString(36).substr(2, 9);
     
     if (activeTab === 'students') {
@@ -83,15 +89,43 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
     setItemToDelete(id);
   };
 
+  const handleBulkDeleteClick = () => {
+    if (selectedIds.size === 0) return;
+    setItemToDelete('__BULK__');
+  };
+
   const confirmDelete = () => {
     if (!itemToDelete) return;
     
-    if (activeTab === 'students') StorageService.deleteStudent(itemToDelete);
-    if (activeTab === 'teachers') StorageService.deleteTeacher(itemToDelete);
-    if (activeTab === 'classes') StorageService.deleteClass(itemToDelete);
+    const idsToDelete = itemToDelete === '__BULK__' ? Array.from(selectedIds) : [itemToDelete];
+    
+    idsToDelete.forEach(id => {
+      if (activeTab === 'students') StorageService.deleteStudent(id);
+      if (activeTab === 'teachers') StorageService.deleteTeacher(id);
+      if (activeTab === 'classes') StorageService.deleteClass(id);
+    });
     
     onUpdate();
     setItemToDelete(null);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = (items: any[]) => {
+    if (selectedIds.size === items.length && items.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map(i => i.id)));
+    }
   };
 
   // --- Logic for Low Frequency (4 consecutive absences) ---
@@ -99,28 +133,25 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
     if (!window.confirm("Isso irá verificar todos os alunos ativos. Se tiverem 4 faltas consecutivas recentes, serão movidos para 'Baixa Frequência'. Continuar?")) return;
 
     const attendance = StorageService.getAttendance();
-    // Sort attendance by date desc
     const sortedAttendance = [...attendance].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     let movedCount = 0;
 
     students.forEach(student => {
-      if (!student.active) return; // Skip already inactive
+      if (!student.active) return;
 
-      // Get records for this student's class
       const classRecords = sortedAttendance.filter(r => r.classId === student.classId);
       
       let consecutiveAbsences = 0;
       for (const record of classRecords) {
         if (record.presentStudentIds.includes(student.id)) {
-          break; // Streak broken
+          break; 
         } else {
           consecutiveAbsences++;
         }
       }
 
       if (consecutiveAbsences >= 4) {
-        // Deactivate student
         StorageService.saveStudent({ ...student, active: false });
         movedCount++;
       }
@@ -175,23 +206,18 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
       if (!text) return;
 
       const lines = text.split('\n');
-      // Remove header and empty lines
       const dataRows = lines.slice(1).filter(line => line.trim() !== '');
       let successCount = 0;
 
       dataRows.forEach(row => {
-        // Support both comma and semicolon separators
         const cols = row.split(/[;,]/).map(c => c.trim().replace(/^"|"$/g, ''));
         
-        if (cols.length < 2) return; // Skip invalid rows
+        if (cols.length < 2) return;
 
         const id = Math.random().toString(36).substr(2, 9);
 
         if (activeTab === 'students') {
-          // Format: Name, BirthDate, ClassName, Phone
           const [name, birthDate, className, phone] = cols;
-          
-          // Find class ID by Name
           const foundClass = classes.find(c => c.name.toLowerCase() === className?.toLowerCase());
           
           if (name) {
@@ -199,7 +225,7 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
                id,
                name,
                birthDate: birthDate || '',
-               classId: foundClass ? foundClass.id : '', // Leave empty if not found
+               classId: foundClass ? foundClass.id : '',
                phone: phone || '',
                active: true
              };
@@ -208,7 +234,6 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
           }
 
         } else if (activeTab === 'teachers') {
-           // Format: Name, Phone, Email
            const [name, phone, email] = cols;
            if (name) {
              const teacher: Teacher = {
@@ -223,7 +248,6 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
            }
 
         } else if (activeTab === 'classes') {
-           // Format: Name, AgeRange, Room
            const [name, ageRange, room] = cols;
            if (name) {
              const cls: ClassRoom = {
@@ -240,22 +264,27 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
 
       alert(`${successCount} registros importados com sucesso!`);
       onUpdate();
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     reader.readAsText(file);
   };
 
-  // Filter lists based on search
-  const filteredStudents = students.filter(s => {
+  const filteredStudents = useMemo(() => students.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = studentStatusTab === 'active' ? s.active : !s.active;
     return matchesSearch && matchesStatus;
-  });
+  }), [students, searchTerm, studentStatusTab]);
   
-  const filteredTeachers = teachers.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const filteredClasses = classes.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredTeachers = useMemo(() => teachers.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase())), [teachers, searchTerm]);
+  const filteredClasses = useMemo(() => classes.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())), [classes, searchTerm]);
+
+  const currentVisibleItems = useMemo(() => {
+    if (activeTab === 'students') return filteredStudents;
+    if (activeTab === 'teachers') return filteredTeachers;
+    if (activeTab === 'classes') return filteredClasses;
+    return [];
+  }, [activeTab, filteredStudents, filteredTeachers, filteredClasses]);
 
   const TabButton = ({ id, label }: { id: TabType, label: string }) => (
     <button
@@ -283,12 +312,10 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
         </div>
       </div>
 
-      {/* Render User Management (Embedded) */}
       {activeTab === 'users' && user?.role === 'admin' ? (
         <UserManagement isEmbedded={true} />
       ) : (
         <>
-            {/* Sub-tabs for Students */}
             {activeTab === 'students' && (
               <div className="flex items-center justify-between bg-gray-100 p-2 rounded-lg">
                   <div className="flex gap-2">
@@ -321,7 +348,6 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
               </div>
             )}
 
-            {/* Toolbar - Only for standard registries */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="relative flex-1 w-full md:max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -335,7 +361,16 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
               </div>
 
               <div className="flex gap-2 w-full md:w-auto">
-                {/* Import/Export Buttons */}
+                {selectedIds.size > 0 && (
+                   <button 
+                     type="button"
+                     onClick={handleBulkDeleteClick}
+                     className="flex items-center justify-center gap-2 bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold border border-red-200 hover:bg-red-200 transition-all animate-fade-in"
+                   >
+                     <Trash2 size={18} /> Excluir ({selectedIds.size})
+                   </button>
+                )}
+
                 <div className="flex gap-2 mr-2 border-r border-gray-200 pr-4">
                   <input 
                       type="file" 
@@ -372,12 +407,19 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
               </div>
             </div>
 
-            {/* Table Area */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-gray-600">
                   <thead className="bg-gray-50 text-gray-700 font-semibold uppercase text-xs border-b">
                     <tr>
+                      <th className="px-6 py-3 w-10">
+                        <input 
+                          type="checkbox" 
+                          className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                          checked={selectedIds.size > 0 && selectedIds.size === currentVisibleItems.length}
+                          onChange={() => toggleSelectAll(currentVisibleItems)}
+                        />
+                      </th>
                       <th className="px-6 py-3">Nome</th>
                       {activeTab === 'students' && <th className="px-6 py-3">Classe</th>}
                       {activeTab === 'students' && studentStatusTab === 'inactive' && <th className="px-6 py-3 text-red-500">Status</th>}
@@ -388,7 +430,15 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {activeTab === 'students' && filteredStudents.map(student => (
-                      <tr key={student.id} className="hover:bg-gray-50">
+                      <tr key={student.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(student.id) ? 'bg-blue-50/40' : ''}`}>
+                        <td className="px-6 py-4">
+                           <input 
+                             type="checkbox" 
+                             className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                             checked={selectedIds.has(student.id)}
+                             onChange={() => toggleSelect(student.id)}
+                           />
+                        </td>
                         <td className="px-6 py-4 font-medium text-gray-900">{student.name}</td>
                         <td className="px-6 py-4">
                           {classes.find(c => c.id === student.classId)?.name || '-'}
@@ -402,7 +452,15 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
                     ))}
                     
                     {activeTab === 'teachers' && filteredTeachers.map(teacher => (
-                      <tr key={teacher.id} className="hover:bg-gray-50">
+                      <tr key={teacher.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(teacher.id) ? 'bg-blue-50/40' : ''}`}>
+                        <td className="px-6 py-4">
+                           <input 
+                             type="checkbox" 
+                             className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                             checked={selectedIds.has(teacher.id)}
+                             onChange={() => toggleSelect(teacher.id)}
+                           />
+                        </td>
                         <td className="px-6 py-4 font-medium text-gray-900">{teacher.name}</td>
                         <td className="px-6 py-4">{teacher.phone}</td>
                         <td className="px-6 py-4 text-right space-x-2">
@@ -413,7 +471,15 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
                     ))}
 
                     {activeTab === 'classes' && filteredClasses.map(cls => (
-                      <tr key={cls.id} className="hover:bg-gray-50">
+                      <tr key={cls.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(cls.id) ? 'bg-blue-50/40' : ''}`}>
+                        <td className="px-6 py-4">
+                           <input 
+                             type="checkbox" 
+                             className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                             checked={selectedIds.has(cls.id)}
+                             onChange={() => toggleSelect(cls.id)}
+                           />
+                        </td>
                         <td className="px-6 py-4 font-medium text-gray-900">{cls.name}</td>
                         <td className="px-6 py-4">{cls.ageRange}</td>
                         <td className="px-6 py-4 text-right space-x-2">
@@ -424,10 +490,7 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
                     ))}
                   </tbody>
                 </table>
-                {/* Empty States */}
-                {((activeTab === 'students' && filteredStudents.length === 0) ||
-                  (activeTab === 'teachers' && filteredTeachers.length === 0) ||
-                  (activeTab === 'classes' && filteredClasses.length === 0)) && (
+                {currentVisibleItems.length === 0 && (
                   <div className="p-8 text-center text-gray-400">Nenhum registro encontrado.</div>
                 )}
               </div>
@@ -442,9 +505,12 @@ const Registry: React.FC<RegistryProps> = ({ students, teachers, classes, user, 
              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
                 <AlertCircle className="h-6 w-6 text-red-600" />
              </div>
-             <h3 className="text-lg font-bold text-gray-900 mb-2">Excluir Registro?</h3>
+             <h3 className="text-lg font-bold text-gray-900 mb-2">Excluir Registro{itemToDelete === '__BULK__' ? 's' : ''}?</h3>
              <p className="text-sm text-gray-500 mb-6">
-               Tem certeza que deseja excluir permanentemente? Esta ação não pode ser desfeita.
+               {itemToDelete === '__BULK__' 
+                 ? `Tem certeza que deseja excluir os ${selectedIds.size} registros selecionados? Esta ação não pode ser desfeita.`
+                 : 'Tem certeza que deseja excluir permanentemente? Esta ação não pode ser desfeita.'
+               }
              </p>
              <div className="flex gap-3">
                 <button 

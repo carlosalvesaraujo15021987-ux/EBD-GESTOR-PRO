@@ -17,6 +17,7 @@
     "react-markdown": "^10.1.0",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.5.29",
+    "xlsx": "0.18.5",
     "@supabase/supabase-js": "^2.48.1"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 
-import { Student, Teacher, ClassRoom, AttendanceRecord, ChurchSettings, QuarterlyLesson, WallPost, ChurchEvent, User } from '../types';
+import { Student, Teacher, ClassRoom, AttendanceRecord, ChurchSettings, QuarterlyLesson, WallPost, ChurchEvent, User, ThemePalette } from '../types';
+import { supabase } from './supabase';
 
 const STORAGE_KEYS = {
   STUDENTS: 'ebd_students',
@@ -14,93 +15,42 @@ const STORAGE_KEYS = {
   USERS: 'ebd_users',
   SESSION: 'ebd_session_user',
   AGENDA_BANNER: 'ebd_agenda_banner',
-  THEME: 'ebd_theme'
+  THEME: 'ebd_theme',
+  PALETTE: 'ebd_palette'
 };
 
-// Seed Data
-const initialClasses: ClassRoom[] = [
-  { id: 'c1', name: 'Jardim de Infância', ageRange: '4-6 anos', room: 'Sala 1', mainTeacherId: 't1' },
-  { id: 'c2', name: 'Primários', ageRange: '7-9 anos', room: 'Sala 2', mainTeacherId: 't2' },
-  { id: 'c3', name: 'Jovens', ageRange: '18-25 anos', room: 'Salão B', mainTeacherId: 't3' },
-  { id: 'c4', name: 'Adultos', ageRange: '26+ anos', room: 'Nave Principal', mainTeacherId: 't4' },
-];
-
-const initialTeachers: Teacher[] = [
-  { id: 't1', name: 'Ana Silva', classIds: ['c1'], phone: '(11) 99999-1111', email: 'ana@email.com' },
-  { id: 't2', name: 'Carlos Santos', classIds: ['c2'], phone: '(11) 99999-2222' },
-  { id: 't3', name: 'Pr. Marcos', classIds: ['c3', 'c4'], phone: '(11) 99999-3333' },
-  { id: 't4', name: 'Dra. Cláudia', classIds: ['c4'], phone: '(11) 99999-4444' },
-];
-
-const initialStudents: Student[] = [
-  { id: 's1', name: 'Lucas Oliveira', birthDate: '2018-05-10', classId: 'c1', active: true },
-  { id: 's2', name: 'Sofia Lima', birthDate: '2019-02-15', classId: 'c1', active: true },
-  { id: 's3', name: 'Pedro Henrique', birthDate: '2015-08-20', classId: 'c2', active: true },
-  { id: 's4', name: 'Mariana Costa', birthDate: '2016-11-05', classId: 'c2', active: true },
-  { id: 's5', name: 'João Victor', birthDate: '2000-01-01', classId: 'c3', active: true },
-  { id: 's6', name: 'Fernanda Souza', birthDate: '1985-06-12', classId: 'c4', active: true },
-  { id: 's7', name: 'Roberto Almeida', birthDate: '1970-03-30', classId: 'c4', active: false },
-];
-
-const initialAttendance: AttendanceRecord[] = [
-  {
-    id: 'att1',
-    date: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
-    classId: 'c1',
-    presentStudentIds: ['s1', 's2'],
-    visitorsCount: 1,
-    biblesCount: 2,
-    magazinesCount: 2,
-    offeringValue: 15.50,
-    notes: 'Aula sobre a Arca de Noé'
-  }
-];
+const APP_METADATA = {
+  name: "EBD Gestor Pro",
+  version: "2.1.0"
+};
 
 const initialSettings: ChurchSettings = {
   churchName: 'ADMSJP - Assembleia de Deus Ministerio São Jose dos Pinhais',
   address: 'Rua Joao Maria Goes, 161 Jd Brasil - São Jose dos Pinhais PR',
+  themePalette: 'blue',
   leadership: {
-    pastorPresidente: 'Pr. Ival Teodoro da Silva e Irma Cida Alves',
-    dirigentes: 'Pr. Marcelo Fonseca e Alecia Fonseca',
-    superintendentes: 'Pr. Habib Assunção Dias e Sueli Raquel Camilo Dias',
-    secretarios: 'Milton Correia e Dc. Carlos Alves de Araujo',
+    pastorPresidente: 'Pr. Ival Teodoro da Silva',
+    dirigentes: 'Pr. Marcelo Fonseca',
+    superintendentes: 'Pr. Habib Assunção Dias',
+    secretarios: 'Milton Correia',
     tesoureiro: 'Ronei A. Santos'
   }
 };
 
-const initialAdmin: User = {
-    id: 'admin_1',
-    name: 'Administrador',
-    email: 'admin@ebd.com',
-    password: 'admin123',
-    role: 'admin',
-    token: 'ADMIN1',
-    active: true,
-    createdAt: new Date().toISOString()
+const DEFAULT_ADMIN: User = {
+  id: 'admin-001',
+  name: 'Administrador EBD',
+  email: 'admin@ebd.com',
+  password: 'admin123',
+  role: 'admin',
+  token: 'MASTER',
+  active: true,
+  createdAt: new Date().toISOString()
 };
 
-/**
- * Função utilitária para parsing seguro de JSON.
- * Se o valor não for um JSON válido (ex: data pura "2025-02-18"), 
- * retorna o valor original como string, evitando o SyntaxError.
- */
 const safeJsonParse = (key: string, fallback: any = null) => {
     const val = localStorage.getItem(key);
     if (val === null) return fallback;
-    
-    const trimmed = val.trim();
-    // JSON strings start with specific characters. 
-    // This pre-check prevents the parser from exploding on date strings like 2025-02-18
-    const isJsonLike = (
-        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
-        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-        trimmed === 'true' || trimmed === 'false' || trimmed === 'null' ||
-        /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)
-    );
-
-    if (!isJsonLike) return val;
-
     try {
         return JSON.parse(val);
     } catch (e) {
@@ -111,25 +61,6 @@ const safeJsonParse = (key: string, fallback: any = null) => {
 const safeJsonSet = (key: string, value: any) => {
     localStorage.setItem(key, JSON.stringify(value));
 };
-
-const initStorage = () => {
-  if (!localStorage.getItem(STORAGE_KEYS.CLASSES)) {
-    safeJsonSet(STORAGE_KEYS.CLASSES, initialClasses);
-    safeJsonSet(STORAGE_KEYS.TEACHERS, initialTeachers);
-    safeJsonSet(STORAGE_KEYS.STUDENTS, initialStudents);
-    safeJsonSet(STORAGE_KEYS.ATTENDANCE, initialAttendance);
-    safeJsonSet(STORAGE_KEYS.SETTINGS, initialSettings);
-    safeJsonSet(STORAGE_KEYS.LESSONS, []);
-    safeJsonSet(STORAGE_KEYS.POSTS, []);
-    safeJsonSet(STORAGE_KEYS.EVENTS, []);
-  }
-
-  if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
-      safeJsonSet(STORAGE_KEYS.USERS, [initialAdmin]);
-  }
-};
-
-initStorage();
 
 export const StorageService = {
   getClasses: (): ClassRoom[] => safeJsonParse(STORAGE_KEYS.CLASSES, []),
@@ -174,9 +105,7 @@ export const StorageService = {
   },
 
   getSettings: (): ChurchSettings => safeJsonParse(STORAGE_KEYS.SETTINGS, initialSettings),
-  saveSettings: (settings: ChurchSettings) => {
-    safeJsonSet(STORAGE_KEYS.SETTINGS, settings);
-  },
+  saveSettings: (settings: ChurchSettings) => safeJsonSet(STORAGE_KEYS.SETTINGS, settings),
 
   getLessons: (): QuarterlyLesson[] => safeJsonParse(STORAGE_KEYS.LESSONS, []),
   saveLesson: (lesson: QuarterlyLesson) => {
@@ -200,6 +129,13 @@ export const StorageService = {
     safeJsonSet(STORAGE_KEYS.POSTS, StorageService.getPosts().filter(p => p.id !== id));
   },
 
+  setLastSeenMural: () => {
+    localStorage.setItem(STORAGE_KEYS.LAST_SEEN_MURAL, new Date().toISOString());
+  },
+  getLastSeenMural: (): string => {
+    return localStorage.getItem(STORAGE_KEYS.LAST_SEEN_MURAL) || new Date(0).toISOString();
+  },
+
   getEvents: (): ChurchEvent[] => safeJsonParse(STORAGE_KEYS.EVENTS, []),
   saveEvent: (event: ChurchEvent) => {
     const data = StorageService.getEvents();
@@ -215,12 +151,14 @@ export const StorageService = {
   saveAgendaBanner: (url: string) => safeJsonSet(STORAGE_KEYS.AGENDA_BANNER, url),
   deleteAgendaBanner: () => localStorage.removeItem(STORAGE_KEYS.AGENDA_BANNER),
 
-  getLastSeenMural: (): string => safeJsonParse(STORAGE_KEYS.LAST_SEEN_MURAL, '1970-01-01T00:00:00.000Z'),
-  setLastSeenMural: (dateStr?: string) => {
-    safeJsonSet(STORAGE_KEYS.LAST_SEEN_MURAL, dateStr || new Date().toISOString());
+  getUsers: (): User[] => {
+    const users = safeJsonParse(STORAGE_KEYS.USERS, []);
+    if (users.length === 0) {
+        safeJsonSet(STORAGE_KEYS.USERS, [DEFAULT_ADMIN]);
+        return [DEFAULT_ADMIN];
+    }
+    return users;
   },
-
-  getUsers: (): User[] => safeJsonParse(STORAGE_KEYS.USERS, []),
   saveUser: (user: User) => {
     const users = StorageService.getUsers();
     const idx = users.findIndex(u => u.id === user.id);
@@ -228,55 +166,98 @@ export const StorageService = {
     safeJsonSet(STORAGE_KEYS.USERS, users);
   },
   deleteUser: (id: string) => {
-     safeJsonSet(STORAGE_KEYS.USERS, StorageService.getUsers().filter(u => u.id !== id));
+    safeJsonSet(STORAGE_KEYS.USERS, StorageService.getUsers().filter(u => u.id !== id));
+  },
+
+  validateToken: (token: string): User | null => {
+    const users = StorageService.getUsers();
+    return users.find(u => u.token === token) || null;
   },
 
   login: (email: string, pass: string): User | null => {
       const users = StorageService.getUsers();
-      const user = users.find(u => u.email === email && u.password === pass && u.active);
+      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === pass && u.active);
       if (user) {
           safeJsonSet(STORAGE_KEYS.SESSION, user);
           return user;
       }
       return null;
   },
-
   logout: () => localStorage.removeItem(STORAGE_KEYS.SESSION),
   getCurrentUser: (): User | null => safeJsonParse(STORAGE_KEYS.SESSION, null),
-  validateToken: (token: string): User | null => StorageService.getUsers().find(u => u.token === token) || null,
+
+  getTheme: (): string => localStorage.getItem(STORAGE_KEYS.THEME) || 'light',
+  setTheme: (theme: string) => localStorage.setItem(STORAGE_KEYS.THEME, theme),
+
+  getPalette: (): ThemePalette => (localStorage.getItem(STORAGE_KEYS.PALETTE) as ThemePalette) || 'blue',
+  setPalette: (palette: ThemePalette) => localStorage.setItem(STORAGE_KEYS.PALETTE, palette),
 
   exportAllData: (): string => {
-    const backup: Record<string, any> = {};
-    Object.values(STORAGE_KEYS).forEach(key => {
-      const value = localStorage.getItem(key);
-      if (value) {
-        try {
-          const parsed = JSON.parse(value);
-          backup[key] = parsed;
-        } catch (e) {
-          // If it's a raw string in storage, keep it as raw string
-          backup[key] = value;
-        }
-      }
+    const data: any = { metadata: { ...APP_METADATA, exportDate: new Date().toISOString() }, content: {} };
+    Object.entries(STORAGE_KEYS).forEach(([_, key]) => {
+      const val = localStorage.getItem(key);
+      if (val) data.content[key] = safeJsonParse(key);
     });
-    return JSON.stringify(backup, null, 2);
+    return JSON.stringify(data, null, 2);
   },
 
   importAllData: (jsonData: string) => {
     try {
-      const backup = JSON.parse(jsonData);
-      Object.keys(backup).forEach(key => {
-        if (Object.values(STORAGE_KEYS).includes(key)) {
-          localStorage.setItem(key, JSON.stringify(backup[key]));
-        }
+      const data = JSON.parse(jsonData);
+      if (!data || !data.content) throw new Error('Formato de backup inválido.');
+      Object.entries(data.content).forEach(([key, value]) => {
+        localStorage.setItem(key, JSON.stringify(value));
       });
       window.location.reload();
     } catch (e) {
-      console.error('Falha ao restaurar backup:', e);
-      throw new Error('Arquivo de backup inválido.');
+      throw new Error('Erro ao restaurar dados: ' + (e as Error).message);
     }
   },
 
-  getTheme: (): string => safeJsonParse(STORAGE_KEYS.THEME, 'light'),
-  setTheme: (theme: string) => safeJsonSet(STORAGE_KEYS.THEME, theme)
+  // --- MÉTODOS SUPABASE (Nuvem) ---
+  
+  pushToCloud: async (): Promise<{ success: boolean; message: string }> => {
+    const user = StorageService.getCurrentUser();
+    if (!user) return { success: false, message: 'Usuário não autenticado.' };
+
+    try {
+      const payload = StorageService.exportAllData();
+      
+      const { error } = await supabase
+        .from('ebd_backups')
+        .upsert({ 
+          email: user.email.toLowerCase(), 
+          payload: JSON.parse(payload),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'email' });
+
+      if (error) throw error;
+      return { success: true, message: 'Dados sincronizados com sucesso na nuvem!' };
+    } catch (e: any) {
+      console.error('Supabase Sync Error:', e);
+      return { success: false, message: 'Erro ao sincronizar: ' + (e.message || 'Verifique se a tabela ebd_backups existe no seu Supabase.') };
+    }
+  },
+
+  pullFromCloud: async (): Promise<{ success: boolean; message: string }> => {
+    const user = StorageService.getCurrentUser();
+    if (!user) return { success: false, message: 'Usuário não autenticado.' };
+
+    try {
+      const { data, error } = await supabase
+        .from('ebd_backups')
+        .select('payload')
+        .eq('email', user.email.toLowerCase())
+        .single();
+
+      if (error) throw error;
+      if (!data) return { success: false, message: 'Nenhum backup encontrado na nuvem para este usuário.' };
+
+      StorageService.importAllData(JSON.stringify(data.payload));
+      return { success: true, message: 'Dados restaurados da nuvem com sucesso!' };
+    } catch (e: any) {
+      console.error('Supabase Restore Error:', e);
+      return { success: false, message: 'Erro ao restaurar: ' + (e.message || 'Verifique se a tabela ebd_backups existe no seu Supabase.') };
+    }
+  }
 };
